@@ -2,7 +2,7 @@ import os
 import gspread
 from google.oauth2.service_account import Credentials
 import psycopg2
-from flask import Flask, render_template, request, redirect, url_for, flash, session
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField
 from wtforms.validators import InputRequired
@@ -55,6 +55,8 @@ salesSheet = "11hbwIBrc5omZ_1Qbs3VlyNpwR-kPcjQpOCX7RUdc-kI";
 # Connect to Google Sheets
 gc = gspread.authorize(creds)
 
+def openSheet(SHEET_ID, SHEET_TAB):
+    return gc.open_by_key(SHEET_ID).worksheet(SHEET_TAB)
 
 # Fetch data from the Google Sheet
 def get_sheet_data(SHEET_ID):
@@ -149,8 +151,41 @@ def new():
 
 
     return render_template('new.html', ckeys = ckeys, customers=customers, products=allProducts, pkeys=pkeys, productTypes=productTypes)
-  
 
+
+@app.route('/updateStock', methods=['POST'])
+def updateStock():
+    isloggedin()
+    data = request.get_json()
+    print(data)
+
+    prods = get_all_sheets_data(productSheet)
+
+    matches = []
+    for sheet in prods.items(): 
+        for p,q in data['toPurchase'].items():
+            for row in sheet:
+                cellr = 0
+                for c in row:
+                    cellr += 1
+                    if c[0] == p:
+                        matches.append({'sheet': sheet[0], 'row': c, 'cellr':cellr, 'purchasedAmount':int(q)})
+                        modSheetStock(matches[len(matches)-1])
+
+    return "success"
+
+    #return render_template('invoice.html')
+  
+def modSheetStock(match):
+    print(match['row'])
+    #TODO if matches >2 or <0 error
+    #TODO if current stock < desired stock
+    currentStock = int(match['row'][7]);
+    print(f"cs {currentStock}")
+    stock = openSheet(productSheet, match['sheet'])
+
+    newqty = currentStock - match['purchasedAmount']
+    stock.update_cell(match['cellr'], 8, newqty)
 
 #take data from sheet, isolate header as keys list, map values of rets of sheet to object with keys
 def remapData(data):
