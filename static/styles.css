@@ -96,4 +96,8 @@ h3{
 	top:10%;
 }
 
+#invoicetotal{
+	text-align: right;
+}
+
 .hideit{display:none;}

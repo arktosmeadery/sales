@@ -105,15 +105,23 @@
                 <th> price </th>
                 <th> total </th>
             </tr>
-        <tr>
-            <td>TOTAL:</td>
-            <td id='invoicetotal'></td>
-        </tr>
+        
+        </table>
+        <table>
+            <tr>
+                <td>TOTAL:</td>
+                <td id='invoicetotal'></td>
+            </tr>
         </table>
         <div id='customername'>
         </div>
         <div id='signaturebox'>
         </div>
+    </div>
+    <div id='submit'>
+        <button class='abutton hideit'>
+            submit and generate invoice
+        </button>
     </div>
 
     <div id='amountPop' class='hideit'>
@@ -136,6 +144,8 @@
         var customerID = false;
         var toPurchase = {};
         productsToPurchase = {};
+
+        //CLICKS
         $('#customerTable .acustomer').click(function(){
             customerID = $(this).attr('id').substr(1);
             $('#customerTable tr').removeClass('selected');
@@ -151,15 +161,17 @@
         $('#productTable .aproduct').click(function(){
             $(this).addClass('selected');
             amountPopUp($(this).attr('id'), $(this).find(".stock").data('value'));
-            
         });
 
+        //amount pop up to select qty
         function amountPopUp(id, stock){
-            
+            //x out of pop up
             $('#amountPop').removeClass('hideit');
             $('#amountPop .close').off().click(function(){
                 cancelPopUp(id, 'close');
             });
+
+            // ok button adds product to summary, if qty selected >0, else close poopup
             $('#amountPop .ok').off().click(function(){
                 if($('#popamount').val() > 0){
                     var amt = $('#popamount').val();
@@ -172,16 +184,16 @@
                 }
             });
 
+            //cancel button closes popup
             $('#amountPop .cancel').off().click(function(){
                 cancelPopUp(id, 'cancel');
             });
-
   
+            //adds product info to pop up and generates select menu for current stock amount
             var prodName = $("#" + id + " .name").data("value");
             var stockAvailable = $("#" + id + " .stock").data("value");
             $('#amountPop #popname').html(prodName);
-
-            
+          
             $('#poptype').html($("#" + id).closest('.prodType').find('h3').first().html());
             $('#popamount').html('');
             for(var i=0;i<stockAvailable+1;i++){
@@ -190,6 +202,7 @@
 
         }
 
+        //clear stok pop up, remove amount if amount reset
         function cancelPopUp(id, why){
             $('#amountPop').addClass('hideit');
             if(why == 'zero'){
@@ -199,6 +212,9 @@
             }
         }
 
+        //add selected product to summary,
+        // remove it first, in case duplicate
+        // adjust total
         function addProductToSummary(pid, amt){
             removeProductFromSummary(pid);
             var prodType = $("#" + pid).closest('.prodType').find('h3').first().html();
@@ -213,24 +229,40 @@
             str += "<td class='tot'>" + (amt*price).toFixed(2) + "</td>";
 
             $('#productsToPurchase').append(str);
-//add total to sumamry
+            
+            adjustTotal();
         }
+
         function removeProductFromSummary(pid){
             $('#summary #' + pid).remove();
+            adjustTotal();
         }
 
-
+        //add selected customer info to invoice
         function addCustomerToSummary(cid){
             var contactName = $("#c" + cid + " .contact").data("value");
             var bizName = $("#c" + cid + " .business_name").data("value"); 
             $('#activeCustomer').html(bizName);
             $('#customername').html(contactName);
+        }
 
+        //adjust final total based on line items
+        function adjustTotal(){
+            cost = 0;
+            $('#productsToPurchase .tot').each(function(){
+                cost += parseFloat($(this).html());
+            })
+            $('#invoicetotal').html(cost.toFixed(2));
+            if(cost>0){
+                $('#submit .abutton').removeClass('hideit');
+            }else{
+                $('#submit .abutton').addClass('hideit');
+            }
         }
 
 
 
-        //create summary
+        
         //get signature
         //submit
         //update google sheets
