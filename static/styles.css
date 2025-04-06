@@ -1,0 +1,99 @@
+html{
+	background-color:#111111;
+	color:#eee;
+	font-family: sans-serif;
+	font-size:12px;
+}
+
+nav a{
+	height:50px;
+	display:block;
+	text-decoration: none;
+}
+h3{
+	margin-bottom:2px;
+	margin-top:25px;
+	color:#FFB238;
+}
+.question{
+	margin:50px;
+	padding:30px;
+	border:solid #444 3px;
+	border-radius :10px;
+}
+
+.abutton{
+            padding:10px 20px;
+            cursor: pointer;
+            background-color:#000;
+            border-radius:5px;
+            width:150px;
+            border:solid #333 3px;
+            margin:20px;
+            display: block;
+            color:#eee;
+        }
+
+.abutton:hover{
+	border-color:#FFB238;
+}
+.selected{
+            background-color:#FFB238;
+            color:#000;
+        }
+
+#amountPop{
+	position: fixed;
+	top:0px;
+	left:0px;
+	width:100%;
+	height:100%;
+	background-color:rgba(1,1,1,.8);
+	text-align: center;
+}
+#amountPop #wrap{
+	background-color:#111;
+	border-radius:10px;
+	width:400px;
+	height:200px;
+	right:50%;
+	top:50%;
+	margin-right:-200px;
+	margin-top:-100px;
+	position: absolute;
+	display:block;
+	z-index:10;
+
+}
+.close{
+	width:20px;
+	height:20px;
+	position: absolute;
+	top:10px;
+	right:10px;
+	cursor: pointer;
+	z-index: 11;
+}
+#amountPop select{
+	margin-top:20px;
+	padding:10px 20px;
+	position: relative;
+
+}
+
+.popinfo{
+	width:50%;
+	height: 90%;
+	position: absolute;
+	left:0;
+	top:10%;
+}
+.popbuttons{
+	width:50%;
+	height: 90%;
+	position: absolute;
+	right:0;
+	top:10%;
+}
+
+.hideit{display:none;}

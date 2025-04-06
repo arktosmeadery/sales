@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+    <script src="{{ url_for('static',filename='jquery.js') }}"></script>
+    <title>ArktosSales</title>
+    <style>
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+
+        table, th, td {
+            border: 3px solid #111111;
+        }
+
+        th, td {
+            padding: 8px 8px;
+            padding-bottom:0;
+            text-align: left;
+        }
+        tr{
+            cursor: pointer;
+        }
+        tr:hover td{
+            border-bottom-color: #FFB238;
+        }
+        
+        
+    </style>
+</head>
+<body>
+
+    <h1>NEW SALE</h1>
+    <div class='question'>
+        <h2>choose a customer</h2>
+        <table id='customerTable'>
+            <thead>
+                <tr>
+                    {% for k in ckeys %}
+                        {% if k != 'customerID' %}
+                            <th>{{ k }}</th>
+                        {% endif %}
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in customers.values() %}
+                    <tr id="c{{ row['customerID'] }}" class="acustomer">
+                        {% for k in ckeys %}
+                            {% if k != 'customerID' %}
+                                <td class="{{k.replace(' ', '_')}}" data-value="{{row[k]}}">{{ row[k] }}</td>
+                            {% endif %}
+                        {% endfor %}    
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        <!--<div id='addNewCustomer' class='abutton'>add new customer.</div>-->
+    </div>
+    <div class='question'>
+        <h2>select from available products</h2>
+        {% for pt in productTypes %}
+            <div class='prodType'>
+                <h3>{{ pt.replace("_", " ") }}</h3>
+                 <table id='productTable'>
+                    <thead>
+                        <tr>
+                            <th>amt</th>
+                            {% for k in pkeys %}
+                                {% if k != 'productID' %}
+                                    <th>{{ k }}</th>
+                                {% endif %}
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                            {% for row in products[pt].values() %}
+                                <tr id="{{ row['productID'] }}" class = "aproduct">
+                                    <td class='amountToPurchase'></td>
+                                    {% for k in pkeys %}
+                                        {% if k != 'productID' %}
+                                            <td class="{{k}}" data-value="{{row[k]}}">{{ row[k] }}</td>
+                                        {% endif %}
+                                    {% endfor %}    
+                                </tr>
+                            {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% endfor %}
+    </div>
+
+    <div id='summary'>
+        <h1>summary</h1>
+        <div id='activeCustomer'>
+        </div>
+        <table id='productsToPurchase'>
+            <tr>
+                <th> product </th>
+                <th> type </th>
+                <th> amount </th>
+                <th> price </th>
+                <th> total </th>
+            </tr>
+        <tr>
+            <td>TOTAL:</td>
+            <td id='invoicetotal'></td>
+        </tr>
+        </table>
+        <div id='customername'>
+        </div>
+        <div id='signaturebox'>
+        </div>
+    </div>
+
+    <div id='amountPop' class='hideit'>
+        <div id='wrap'>
+            <div class='close'>X</div>
+            <div class='popinfo'>
+                <h4 id='poptype'></h4>
+                <h3 id='popname'></h3>
+
+                <select id='popamount'>
+                </select>
+            </div>
+            <div class='popbuttons'>
+                <button class='abutton ok'>ok</button>
+                <button class='abutton cancel'>cancel</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        var customerID = false;
+        var toPurchase = {};
+        productsToPurchase = {};
+        $('#customerTable .acustomer').click(function(){
+            customerID = $(this).attr('id').substr(1);
+            $('#customerTable tr').removeClass('selected');
+            $(this).addClass('selected');
+            addCustomerToSummary(customerID);
+        });
+
+        $('#addNewCustomer').click(function(){
+            customerID = 'new';
+            $('#customerTable tr').removeClass('selected');
+        });
+
+        $('#productTable .aproduct').click(function(){
+            $(this).addClass('selected');
+            amountPopUp($(this).attr('id'), $(this).find(".stock").data('value'));
+            
+        });
+
+        function amountPopUp(id, stock){
+            
+            $('#amountPop').removeClass('hideit');
+            $('#amountPop .close').off().click(function(){
+                cancelPopUp(id, 'close');
+            });
+            $('#amountPop .ok').off().click(function(){
+                if($('#popamount').val() > 0){
+                    var amt = $('#popamount').val();
+                    toPurchase[id] = amt;
+                    $('#'+id).children(".amountToPurchase").html(amt);
+                    $('#amountPop').addClass('hideit');
+                    addProductToSummary(id,amt)
+                }else{
+                    cancelPopUp(id, 'zero');
+                }
+            });
+
+            $('#amountPop .cancel').off().click(function(){
+                cancelPopUp(id, 'cancel');
+            });
+
+  
+            var prodName = $("#" + id + " .name").data("value");
+            var stockAvailable = $("#" + id + " .stock").data("value");
+            $('#amountPop #popname').html(prodName);
+
+            
+            $('#poptype').html($("#" + id).closest('.prodType').find('h3').first().html());
+            $('#popamount').html('');
+            for(var i=0;i<stockAvailable+1;i++){
+                $('#popamount').append("<option value='"+i+"'>" + i + "</option>");
+            }
+
+        }
+
+        function cancelPopUp(id, why){
+            $('#amountPop').addClass('hideit');
+            if(why == 'zero'){
+                $('#' + id).removeClass('selected');
+                $('#'+ id).children(".amountToPurchase").html('');
+                removeProductFromSummary(id);
+            }
+        }
+
+        function addProductToSummary(pid, amt){
+            removeProductFromSummary(pid);
+            var prodType = $("#" + pid).closest('.prodType').find('h3').first().html();
+            var prodName = $("#" + pid + " .name").data("value");
+            var price = $("#" + pid + " .price").data("value");
+
+            str = "<tr class='aproduct' id='" + pid + "'>";
+            str += "<td class='pname'>" + prodName + "</td>";
+            str += "<td class='ptype'>" + prodType + "</td>";
+            str += "<td class='pamt'>" + amt + "</td>";
+            str += "<td class='price'>"+ price + "</td>";
+            str += "<td class='tot'>" + (amt*price).toFixed(2) + "</td>";
+
+            $('#productsToPurchase').append(str);
+//add total to sumamry
+        }
+        function removeProductFromSummary(pid){
+            $('#summary #' + pid).remove();
+        }
+
+
+        function addCustomerToSummary(cid){
+            var contactName = $("#c" + cid + " .contact").data("value");
+            var bizName = $("#c" + cid + " .business_name").data("value"); 
+            $('#activeCustomer').html(bizName);
+            $('#customername').html(contactName);
+
+        }
+
+
+
+        //create summary
+        //get signature
+        //submit
+        //update google sheets
+        //generate invoice
+
+//add new customer
+
+
+    </script>
+</body>
+</html>
