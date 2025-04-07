@@ -2,11 +2,16 @@ import os
 import gspread
 from google.oauth2.service_account import Credentials
 import psycopg2
-from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify
+from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
+from pdfrw import PdfReader, PdfWriter, PageMerge, PdfDict, PdfObject
 from flask_wtf import FlaskForm
 from wtforms import StringField, PasswordField
 from wtforms.validators import InputRequired
 from werkzeug.security import check_password_hash
+import datetime
+import time
+
+
 #from werkzeug.security import generate_password_hash
 #need for add user route for admin
 
@@ -21,6 +26,7 @@ DB_HOST = os.getenv("DB_HOST")  # Default to localhost for local testing
 DB_NAME = os.getenv("DB_NAME")
 DB_USER = os.getenv("DB_USER")
 DB_PASSWORD = os.getenv("DB_PASSWORD")
+currentUser = False
 
 # Create a connection to PostgreSQL
 def get_db_connection():
@@ -36,6 +42,7 @@ def get_db_connection():
 class LoginForm(FlaskForm):
     username = StringField('Username', validators=[InputRequired()])
     password = PasswordField('Password', validators=[InputRequired()])
+    
 
 
 def isloggedin():
@@ -73,6 +80,18 @@ def get_all_sheets_data(SHEET_ID):
     sheets_data = {ws.title: ws.get_all_values() for ws in sheet.worksheets()}
     print(sheets_data)
     return sheets_data
+
+def getRow(sheet, header, target):
+    all_values = sheet.get_all_values()
+    colnames = all_values[0]
+    col_index = colnames.index(header)
+
+    for i, row in enumerate(all_values[1:], start=2):  # start=2 because header is row 1
+        if len(row) > col_index and row[col_index] == target:
+            return row  # this is the 1-based row number in the sheet
+
+    return None
+
 
 @app.route('/')
 def index():
@@ -153,13 +172,26 @@ def new():
     return render_template('new.html', ckeys = ckeys, customers=customers, products=allProducts, pkeys=pkeys, productTypes=productTypes)
 
 
+@app.route('/generate_invoice', methods=['POST'])
+def generate_invoice():
+    isloggedin()
+    data = request.get_json()
+    print(data)
+    #TODO
+    #get sale by saleID and then pass wot generate
+    #generateInvoice(data['saleID'])
+
 @app.route('/updateStock', methods=['POST'])
 def updateStock():
     isloggedin()
     data = request.get_json()
     print(data)
 
+
     prods = get_all_sheets_data(productSheet)
+    ts = time.time()
+    
+    loggedSales = []
 
     matches = []
     for sheet in prods.items(): 
@@ -171,11 +203,113 @@ def updateStock():
                     if c[0] == p:
                         matches.append({'sheet': sheet[0], 'row': c, 'cellr':cellr, 'purchasedAmount':int(q)})
                         modSheetStock(matches[len(matches)-1])
+                        loggedSales.append(addToSalesSheet(matches[len(matches)-1], ts, data['customerID']))
+    
+    invoiceLink = generateInvoice(ts, loggedSales, data['customerID'])
+    return invoiceLink
 
-    return "success"
 
-    #return render_template('invoice.html')
-  
+def generateInvoice(ts, loggedSales, cid):
+    isloggedin()
+    print(f"LOGGED: {loggedSales}")
+    #[{'sheet': 'MEAD_KEGS', 'row': ['mk1', 'Doc Holiday', 'Huckleberry', '7', '1/5 barrell', '500', '1', '1'], 'cellr': 2, 'purchasedAmount': 1}, 
+    #{'sheet': 'MEAD_CANS', 'row': ['mc1', 'Doc Holiday', 'Huckleberry', '7', '12oz', '100', '6', '1', ''], 'cellr': 2, 'purchasedAmount': 3}]
+    
+    invoiceLink = 0
+    #generateinvocie
+    template_path = os.path.join(app.root_path, 'static', 'arktosInvoiceForm.pdf')
+    output_path = os.path.join(app.root_path, "static", "filled.pdf")
+
+    template_pdf = PdfReader(template_path)
+
+    # Set NeedAppearances to true to ensure fields are visible
+    if not template_pdf.Root.AcroForm:
+        template_pdf.Root.AcroForm = PdfDict()
+
+    template_pdf.Root.AcroForm.update(
+        PdfDict(NeedAppearances=PdfObject('true'))
+    )
+
+    datetime_object = datetime.datetime.fromtimestamp(ts)
+    formatted_date = datetime_object.strftime("%m/%d/%y")
+
+    #get customer info for invoice
+    customers = openSheet(customerSheet, 'activeCustomers')
+    customer = getRow(customers, 'customerID', cid)
+
+    FIELD_MAP = {
+        'date': formatted_date,
+        'saleID': ts,
+        'customerName':customer[1],
+        'address1':customer[3],
+        'address2':customer[4],
+        'seller':session['user_id'],
+        'contact':customer[2],
+        'phone':customer[5]
+    }
+
+    i = 1
+    total = 0
+    for sale in loggedSales:
+        s = sale['sheet'] + ": "
+        s += sale['row'][1] + " " + sale['row'][4]
+        s += ' @$' + sale['row'][5]
+        FIELD_MAP[f"item{i}"] = s
+        FIELD_MAP[f"qty{i}"] = sale['purchasedAmount']
+        linetotal = int(int(sale['purchasedAmount']) * int(sale['row'][5]))
+        FIELD_MAP[f"total{i}"] = linetotal
+        total += linetotal
+        i += 1
+
+    FIELD_MAP['total'] = total
+
+    #item 1 'total1'
+    #    'total'
+    print(f"FIELDMAP \r\n{FIELD_MAP}")
+
+    for page in template_pdf.pages:
+        annotations = page.Annots
+        if annotations:
+            for annotation in annotations:
+                if annotation.Subtype == "/Widget" and annotation.T:
+                    key = annotation.T[1:-1]  # remove parentheses from the name
+                    if key in FIELD_MAP:
+                        annotation.update(
+                            PdfDict(V='{}'.format(FIELD_MAP[key]))
+                        )
+
+    PdfWriter(output_path, trailer=template_pdf).write()
+    
+    return send_file(output_path, as_attachment=True)
+    
+    return 'success'
+
+
+def addToSalesSheet(sale,ts,cid):
+
+    print(f"sale {sale}")
+    print(ts)
+    print(cid)
+    print(datetime.datetime.now().strftime("%Y"))
+    sales = openSheet(salesSheet, datetime.datetime.now().strftime("%Y"))
+    newrow = [
+    datetime.datetime.now().strftime("%m/%d/%Y"),
+    ts,
+    cid,
+    session['user_id'],
+    sale['row'][1],
+    sale['row'][0],
+    sale['purchasedAmount'],
+    sale['row'][5],
+    round(int(sale['purchasedAmount']) * float(sale['row'][5]),2)
+    ]
+
+    print(newrow)
+    sales.append_row(newrow)
+
+    return sale
+
+
 def modSheetStock(match):
     print(match['row'])
     #TODO if matches >2 or <0 error

@@ -30,8 +30,8 @@ $(function(){
     });
 
     $('#submit button').click(function(){
-        console.log( updateStock() );
-        generateInvoice();
+        updateStock();
+        
     });
 });
 
@@ -41,15 +41,29 @@ function updateStock(){
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ customerID: customerID, toPurchase: toPurchase }),
+      body: JSON.stringify({ customerID: customerID, toPurchase: toPurchase  }),
 
     }).then(data =>{
         console.log(data);
-        //generate Invoice here
+
+        //TODO GENERATE INVOICE
+        //generateInvoice(data['saleID'])
     })
 }
-function generateInvoice(){
-    console.log('invoice');
+function generateInvoice(saleID){
+    fetch('/generateInvoice', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ saleID:saleID  }),
+
+    }).then(data =>{
+        console.log(data);
+
+        
+        
+    })
 }
 
 //amount pop up to select qty
@@ -93,6 +107,7 @@ function amountPopUp(id, stock){
 
 //clear stok pop up, remove amount if amount reset
 function cancelPopUp(id, why){
+    //TODO if 0 and cancel - deselect
     $('#amountPop').addClass('hideit');
     if(why == 'zero'){
         $('#' + id).removeClass('selected');
