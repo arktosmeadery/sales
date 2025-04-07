@@ -1,6 +1,10 @@
 import os
 import gspread
 from google.oauth2.service_account import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.http import MediaFileUpload
+from google_auth_oauthlib.flow import InstalledAppFlow
+
 import psycopg2
 from flask import Flask, render_template, request, redirect, url_for, flash, session, jsonify, send_file
 from pdfrw import PdfReader, PdfWriter, PageMerge, PdfDict, PdfObject
@@ -10,6 +14,9 @@ from wtforms.validators import InputRequired
 from werkzeug.security import check_password_hash
 import datetime
 import time
+
+import smtplib
+from email.message import EmailMessage
 
 
 #from werkzeug.security import generate_password_hash
@@ -53,10 +60,11 @@ def isloggedin():
 SCOPE = ['https://www.googleapis.com/auth/spreadsheets']
 creds = Credentials.from_service_account_file('creds/credentials.json', scopes=SCOPE)
 
-productSheet = "1kMzIO2-hISld-AiMqc_EhynN4-3onQ7ycjS0bpQjDdQ";
-customerSheet = "1U4KVhMk_Oq7T4c1hvoj7K9YsR8xVMYawytbh0O45AT8";
-sellerSheet = "1d9HMRlunMMumrmTm6tBlCK-kOBB6VNU4upZ1K9u1oy4";
-salesSheet = "11hbwIBrc5omZ_1Qbs3VlyNpwR-kPcjQpOCX7RUdc-kI";
+productSheet = "1kMzIO2-hISld-AiMqc_EhynN4-3onQ7ycjS0bpQjDdQ"
+customerSheet = "1U4KVhMk_Oq7T4c1hvoj7K9YsR8xVMYawytbh0O45AT8"
+sellerSheet = "1d9HMRlunMMumrmTm6tBlCK-kOBB6VNU4upZ1K9u1oy4"
+salesSheet = "11hbwIBrc5omZ_1Qbs3VlyNpwR-kPcjQpOCX7RUdc-kI"
+invoiceFolder = "1tTbFL0a9jazDvuJXVaSfRaEcWglc0qOb"
 
 
 # Connect to Google Sheets
@@ -119,6 +127,7 @@ def login():
         # Check if the user exists and if the password is correct
         if user and password:#check_password_hash(user[2], password):  # Assuming password is at index 2
             session['user_id'] = user[0]  # Store user ID in the session
+            session['username'] = username
             flash('Login successful!', 'success')
             return redirect(url_for('dashboard'))
         else:
@@ -209,6 +218,25 @@ def updateStock():
     return invoiceLink
 
 
+def send_email_with_pdf(to_address, subject, body, pdf_path):
+    msg = EmailMessage()
+    msg['Subject'] = subject
+    msg['From'] = 'arktosdistro@gmail.com'
+    msg['To'] = to_address
+    msg.set_content(body)
+
+    # Attach PDF
+    with open(pdf_path, 'rb') as f:
+        pdf_data = f.read()
+        msg.add_attachment(pdf_data, maintype='application', subtype='pdf', filename='arktosInvoice.pdf')
+
+    # Send the email (Gmail example)
+    '''
+    with smtplib.SMTP_SSL('smtp.gmail.com', 465) as smtp:
+        smtp.login('your_email@example.com', 'your_password_or_app_password')
+        smtp.send_message(msg)
+    '''
+
 def generateInvoice(ts, loggedSales, cid):
     isloggedin()
     print(f"LOGGED: {loggedSales}")
@@ -243,7 +271,7 @@ def generateInvoice(ts, loggedSales, cid):
         'customerName':customer[1],
         'address1':customer[3],
         'address2':customer[4],
-        'seller':session['user_id'],
+        'seller':session['username'],
         'contact':customer[2],
         'phone':customer[5]
     }
@@ -263,8 +291,6 @@ def generateInvoice(ts, loggedSales, cid):
 
     FIELD_MAP['total'] = total
 
-    #item 1 'total1'
-    #    'total'
     print(f"FIELDMAP \r\n{FIELD_MAP}")
 
     for page in template_pdf.pages:
@@ -279,8 +305,16 @@ def generateInvoice(ts, loggedSales, cid):
                         )
 
     PdfWriter(output_path, trailer=template_pdf).write()
+
+    #send pdf
+    #send_email_with_pdf(customer[7], "Arktos Invoice", "Thank you for your business.", 'static/filled.pdf'):
+    #rename pdf upload to drive
+    #os.rename('static/filled.pdf', 'static/' + ts +'.pdf')
+    #upload_to_drive('static/' + ts + '.pdf', invoiceFolder)
+    #delete pdf from server
+    #os.remove('static/' + ts + '.pdf')
     
-    return send_file(output_path, as_attachment=True)
+    #return send_file(output_path, as_attachment=True)
     
     return 'success'
 
@@ -338,8 +372,38 @@ def remapData(data):
                 cnt+=1
     return remapped,keys
 
+
+SCOPES = ['https://www.googleapis.com/auth/drive.file']
+def upload_to_drive(pdf_path, folder_id):
+    creds = None
+    if os.path.exists('token.json'):
+        creds = Credentials.from_authorized_user_file('token.json', SCOPES)
+    else:
+        flow = InstalledAppFlow.from_client_secrets_file('credentials.json', SCOPES)
+        creds = flow.run_local_server(port=0)
+        with open('token.json', 'w') as token:
+            token.write(creds.to_json())
+
+    service = build('drive', 'v3', credentials=creds)
+
+    file_metadata = {
+        'name': os.path.basename(pdf_path),
+        'parents': [folder_id]  # Google Drive Folder ID
+    }
+    media = MediaFileUpload(pdf_path, mimetype='application/pdf')
+
+    file = service.files().create(
+        body=file_metadata,
+        media_body=media,
+        fields='id'
+    ).execute()
+
+    print('File ID:', file.get('id'))
+
 #edit customer
 #add customer
+#add user (admin page)
+#archive user (admin page)
 
 if __name__ == '__main__':
     app.run(debug=True)

@@ -101,3 +101,21 @@ h3{
 }
 
 .hideit{display:none;}
+
+
+#summary{
+	margin:30px;
+}
+#summary #activeCustomer{
+	font-weight:bold;
+	border-bottom:solid #444 1px;
+	padding-bottom: 10px;
+}
+#summary th, 
+#summary td{
+	border-bottom:solid #222 3px;
+
+}
+#summary #customername{
+	padding-top:10px;
+}

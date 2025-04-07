@@ -130,7 +130,7 @@ function addProductToSummary(pid, amt){
     str += "<td class='ptype'>" + prodType + "</td>";
     str += "<td class='pamt'>" + amt + "</td>";
     str += "<td class='price'>"+ price + "</td>";
-    str += "<td class='tot'>" + (amt*price).toFixed(2) + "</td>";
+    str += "<td class='tot'>$" + (amt*price).toFixed(2) + "</td>";
 
     $('#productsToPurchase').append(str);
     
@@ -156,9 +156,9 @@ function addCustomerToSummary(cid){
 function adjustTotal(){
     cost = 0;
     $('#productsToPurchase .tot').each(function(){
-        cost += parseFloat($(this).html());
+        cost += parseFloat( $(this).html().slice(1) );
     })
-    $('#invoicetotal').html(cost.toFixed(2));
+    $('#invoicetotal').html('$' + cost.toFixed(2));
     if(cost>0 && customerID){
         $('#submit .abutton').removeClass('hideit');
     }else{
